@@ -30,6 +30,7 @@ function astra_child_seo_modules() {
 		'schema_extras' => true,
 		'images'        => true,
 		'robots'        => true,
+		'critical_css'  => true,
 	);
 }
 
