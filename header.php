@@ -21,8 +21,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 <?php astra_head_top(); ?>
 <meta charset="<?php bloginfo( 'charset' ); ?>">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-	<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1333087388129302"
-     crossorigin="anonymous"></script>
 <?php
 if ( apply_filters( 'astra_header_profile_gmpg_link', true ) ) {
 	?>
