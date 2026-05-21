@@ -48,6 +48,17 @@ function astra_child_enqueue_styles() {
 add_action( 'wp_enqueue_scripts', 'astra_child_enqueue_styles' );
 
 /**
+ * Load SEO modules (resource hints, Arabic tweaks, Yoast filters,
+ * FAQ schema shortcodes, image alt fallback).
+ *
+ * Disable everything by returning false from astra_child_load_seo,
+ * or disable a single module via astra_child_seo_module_{slug}.
+ */
+if ( apply_filters( 'astra_child_load_seo', true ) ) {
+	require_once __DIR__ . '/inc/seo/loader.php';
+}
+
+/**
  * Inject the Google AdSense loader script into <head>.
  *
  * Hooked early on wp_head so the script appears near the top of <head>,
