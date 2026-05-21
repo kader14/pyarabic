@@ -29,6 +29,7 @@ function astra_child_seo_modules() {
 		'yoast_tweaks'  => true,
 		'schema_extras' => true,
 		'images'        => true,
+		'robots'        => true,
 	);
 }
 

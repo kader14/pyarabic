@@ -55,6 +55,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `yoast-tweaks`  | Lower priority for Yoast metabox, default Twitter handle, default OG image, Article publisher in schema  |
 | `schema-extras` | `[faq]` / `[faq_item]` shortcodes that emit FAQPage JSON-LD plus a styled accordion                      |
 | `images`        | Auto alt fallback (attachment title or post title) for images missing alt text                           |
+| `robots`        | Adds sitemap, scraper-bot blocks, and low-value endpoint disallows when WP generates robots.txt          |
 
 ### Disable everything
 
@@ -70,6 +71,7 @@ add_filter( 'astra_child_seo_module_arabic',        '__return_false' );
 add_filter( 'astra_child_seo_module_yoast_tweaks',  '__return_false' );
 add_filter( 'astra_child_seo_module_schema_extras', '__return_false' );
 add_filter( 'astra_child_seo_module_images',        '__return_false' );
+add_filter( 'astra_child_seo_module_robots',        '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -119,7 +121,8 @@ astra-child/
         ├── arabic.php           ar_AR locale, RTL breadcrumb, hreflang
         ├── yoast-tweaks.php     Yoast SEO Free filter improvements
         ├── schema-extras.php    [faq] shortcode + FAQPage JSON-LD
-        └── images.php           Alt-text fallback for images
+        ├── images.php           Alt-text fallback for images
+        └── robots.php           robots.txt filter (sitemap, scraper blocks)
 ```
 
 ## Testing checklist
@@ -134,3 +137,51 @@ After activating, verify:
 - View source on a post that uses `[faq]` and confirm a `<script type="application/ld+json">` containing `"@type":"FAQPage"` is rendered.
 - Run the [Rich Results Test](https://search.google.com/test/rich-results) on a FAQ post and confirm Google detects the FAQ.
 - Run [PageSpeed Insights](https://pagespeed.web.dev/) before and after to confirm the resource hints and deferred scripts improved LCP / Total Blocking Time.
+
+
+
+## robots.txt
+
+Two ways to manage `robots.txt`:
+
+### A) Physical file (recommended)
+
+Upload `robots.txt` from the repository root to the document root of the site (same folder as `wp-config.php`). The file ships with sane defaults for a Yoast-powered Arabic site:
+
+- Blocks `wp-admin/`, `xmlrpc.php`, search results, replytocom, and tracking-parameter URLs.
+- Allows assets (CSS/JS/images) so Google can render pages.
+- Blocks aggressive SEO scrapers (Semrush, Ahrefs, MJ12, etc.).
+- Has a commented-out section for AI-training crawlers (GPTBot, ClaudeBot, Google-Extended, etc.) - uncomment to opt out.
+- Declares the Yoast sitemap: `https://pyarabic.com/sitemap_index.xml`.
+
+When this physical file exists, Apache/Nginx serves it directly and the `robots` SEO module is skipped.
+
+### B) Dynamic (delete the physical file)
+
+If `robots.txt` is not present at the document root, WordPress generates one on the fly. The `robots` module then:
+
+1. Adds the sitemap URL (only if Yoast hasn't already done so - no duplicates).
+2. Appends scraper-bot blocks.
+3. Appends extra disallow rules for low-value endpoints.
+
+### Configure the sitemap URL
+
+```php
+define( 'ASTRA_CHILD_SEO_SITEMAP_URL', 'https://pyarabic.com/sitemap_index.xml' );
+```
+
+Or:
+
+```php
+add_filter( 'astra_child_seo_sitemap_url', fn() => 'https://pyarabic.com/sitemap_index.xml' );
+```
+
+### Customize blocked bots
+
+```php
+add_filter( 'astra_child_seo_blocked_bots', function ( $bots ) {
+    $bots[] = 'GPTBot';        // also block AI training
+    $bots[] = 'ClaudeBot';
+    return $bots;
+} );
+```

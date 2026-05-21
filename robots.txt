@@ -1,0 +1,103 @@
+# robots.txt for pyarabic.com
+#
+# This file lives at the document root and overrides WordPress's dynamic
+# robots.txt. Yoast SEO will NOT auto-inject the sitemap when this file is
+# present, so the Sitemap directive below must be kept in sync with Yoast.
+#
+# If you prefer the dynamic version, delete this file and the astra-child
+# robots.php module will add the sitemap to the WP-generated output instead.
+
+User-agent: *
+
+# WordPress core admin: keep blocked, but let admin-ajax.php through because
+# many themes and plugins (including some Astra blocks) call it on the front end.
+Disallow: /wp-admin/
+Allow: /wp-admin/admin-ajax.php
+
+# Sensitive or noisy endpoints that should never be indexed.
+Disallow: /xmlrpc.php
+Disallow: /wp-login.php
+Disallow: /wp-signup.php
+Disallow: /wp-activate.php
+Disallow: /readme.html
+Disallow: /license.txt
+Disallow: /wp-config-sample.php
+
+# Internal search results (low-quality, often flagged as soft 404 / thin content).
+Disallow: /?s=
+Disallow: /search/
+
+# Reply / trackback / comment pagination noise.
+Disallow: /*?replytocom=
+Disallow: /trackback/
+Disallow: /*/trackback/
+
+# Tracking parameters that create duplicate URLs.
+Disallow: /*?utm_*
+Disallow: /*&utm_*
+Disallow: /*?fbclid=
+Disallow: /*?gclid=
+
+# Allow rendering assets so Google can render the page properly.
+# Do NOT block /wp-includes/ or /wp-content/plugins/ - blocking them
+# breaks Mobile Usability and "Page Experience" signals.
+Allow: /wp-content/uploads/
+Allow: /*.css$
+Allow: /*.js$
+Allow: /*.svg$
+Allow: /*.png$
+Allow: /*.jpg$
+Allow: /*.jpeg$
+Allow: /*.gif$
+Allow: /*.webp$
+
+# --- Aggressive SEO scrapers (no SEO benefit, only bandwidth cost). ---
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: SeznamBot
+Disallow: /
+
+# --- AI training crawlers ---
+# Uncomment any of the blocks below to opt out of having pyarabic.com
+# content used to train large language models. Keep them allowed if you
+# want the site to be cited by AI assistants.
+#
+# User-agent: GPTBot
+# Disallow: /
+#
+# User-agent: ChatGPT-User
+# Disallow: /
+#
+# User-agent: ClaudeBot
+# Disallow: /
+#
+# User-agent: anthropic-ai
+# Disallow: /
+#
+# User-agent: CCBot
+# Disallow: /
+#
+# User-agent: Google-Extended
+# Disallow: /
+#
+# User-agent: PerplexityBot
+# Disallow: /
+#
+# User-agent: Bytespider
+# Disallow: /
+
+# Sitemap (Yoast SEO XML sitemap index).
+Sitemap: https://pyarabic.com/sitemap_index.xml
