@@ -56,6 +56,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `schema-extras` | `[faq]` / `[faq_item]` shortcodes that emit FAQPage JSON-LD plus a styled accordion                      |
 | `images`        | Auto alt fallback (attachment title or post title) for images missing alt text                           |
 | `robots`        | Adds sitemap, scraper-bot blocks, and low-value endpoint disallows when WP generates robots.txt          |
+| `critical-css`  | Inlines per-template critical CSS and defers full stylesheets via media="print" onload                   |
 
 ### Disable everything
 
@@ -72,6 +73,7 @@ add_filter( 'astra_child_seo_module_yoast_tweaks',  '__return_false' );
 add_filter( 'astra_child_seo_module_schema_extras', '__return_false' );
 add_filter( 'astra_child_seo_module_images',        '__return_false' );
 add_filter( 'astra_child_seo_module_robots',        '__return_false' );
+add_filter( 'astra_child_seo_module_critical_css',  '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -114,15 +116,23 @@ astra-child/
 ├── style.css                    Child theme header + custom CSS
 ├── functions.php                Enqueues styles, prints AdSense, loads SEO modules
 ├── README.md                    This file
-└── inc/
-    └── seo/
-        ├── loader.php           Loads enabled SEO modules
-        ├── performance.php      Resource hints, emoji removal, defer JS
-        ├── arabic.php           ar_AR locale, RTL breadcrumb, hreflang
-        ├── yoast-tweaks.php     Yoast SEO Free filter improvements
-        ├── schema-extras.php    [faq] shortcode + FAQPage JSON-LD
-        ├── images.php           Alt-text fallback for images
-        └── robots.php           robots.txt filter (sitemap, scraper blocks)
+├── inc/
+│   └── seo/
+│       ├── loader.php           Loads enabled SEO modules
+│       ├── performance.php      Resource hints, emoji removal, defer JS
+│       ├── arabic.php           ar_AR locale, RTL breadcrumb, hreflang
+│       ├── yoast-tweaks.php     Yoast SEO Free filter improvements
+│       ├── schema-extras.php    [faq] shortcode + FAQPage JSON-LD
+│       ├── images.php           Alt-text fallback for images
+│       ├── robots.php           robots.txt filter (sitemap, scraper blocks)
+│       └── critical-css.php     Inline critical CSS + defer the rest
+└── assets/
+    └── critical/
+        ├── default.css          Fallback critical CSS (used when no template match)
+        ├── home.css             (optional) Homepage-specific critical CSS
+        ├── single.css           (optional) Single post critical CSS
+        ├── page.css             (optional) Static page critical CSS
+        └── archive.css          (optional) Archive / search critical CSS
 ```
 
 ## Testing checklist
@@ -137,8 +147,6 @@ After activating, verify:
 - View source on a post that uses `[faq]` and confirm a `<script type="application/ld+json">` containing `"@type":"FAQPage"` is rendered.
 - Run the [Rich Results Test](https://search.google.com/test/rich-results) on a FAQ post and confirm Google detects the FAQ.
 - Run [PageSpeed Insights](https://pagespeed.web.dev/) before and after to confirm the resource hints and deferred scripts improved LCP / Total Blocking Time.
-
-
 
 ## robots.txt
 
@@ -185,3 +193,71 @@ add_filter( 'astra_child_seo_blocked_bots', function ( $bots ) {
     return $bots;
 } );
 ```
+
+## Critical CSS
+
+Inlines a small "above the fold" stylesheet directly in `<head>` so the page can paint without waiting for the full Astra stylesheet, then loads the full CSS asynchronously using the `media="print"` onload swap. Users without JavaScript still get the full styles via a `<noscript>` fallback.
+
+### How it picks a file
+
+The module looks under `astra-child/assets/critical/` for a file matching the current template:
+
+| Template     | File           |
+| ------------ | -------------- |
+| Front page / blog index | `home.css`     |
+| Single post  | `single.css`   |
+| Static page  | `page.css`     |
+| Archive / search | `archive.css` |
+| Anything else | `default.css` |
+
+If a template-specific file is missing, `default.css` is used. The shipped `default.css` covers Astra RTL basics (header, hero, typography) but is intentionally generic.
+
+### Generate a real critical CSS for your live URL
+
+The shipped fallback is a sane minimum, but **a critical CSS generated against your actual rendered page will give you the best LCP score**. Pick one:
+
+```bash
+# Penthouse - precise, headless Chrome based.
+npx penthouse --url https://pyarabic.com --css ./full.css --width 1366 --height 900 > assets/critical/home.css
+
+# critical (Addy Osmani) - similar, with Tailwind-style API.
+npx critical https://pyarabic.com --width 1366 --height 900 --inline=false > assets/critical/home.css
+```
+
+Or use a hosted generator and paste the output:
+
+- https://www.corewebvitals.io/criticalcss
+- https://www.sitelocity.com/critical-path-css-generator
+
+Repeat per template (`home`, `single`, `page`, `archive`) for best results.
+
+### Configuration
+
+```php
+// Disable critical CSS entirely.
+add_filter( 'astra_child_seo_critical_css_enabled', '__return_false' );
+
+// Or disable the whole module via the loader.
+add_filter( 'astra_child_seo_module_critical_css', '__return_false' );
+
+// Keep specific stylesheets blocking (i.e. don't defer them).
+add_filter( 'astra_child_seo_critical_css_handles', function ( $handles ) {
+    $handles[] = 'astra-theme-css';   // example: keep Astra parent blocking
+    $handles[] = 'wp-block-library';
+    return $handles;
+} );
+
+// Override the chosen template (useful for landing pages).
+add_filter( 'astra_child_seo_critical_css_template', function ( $template ) {
+    if ( is_page( 'landing' ) ) {
+        return 'landing';
+    }
+    return $template;
+} );
+```
+
+### Behavior
+
+- Skipped for: admin screens, feeds, AMP endpoints, Customizer preview, and logged-in editors (so editing always shows the full design).
+- Critical CSS is inlined as `<style id="ac-critical-css" data-version="...">` at priority 1 on `wp_head`, before any other tag.
+- Deferred stylesheets are marked with `data-ac-deferred="1"` so they're easy to spot in DevTools.
