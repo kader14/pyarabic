@@ -33,6 +33,7 @@ function astra_child_seo_modules() {
 		'critical_css'     => true,
 		'meta_description' => true,
 		'breadcrumbs'      => true,
+		'article_schema'   => true,
 	);
 }
 

@@ -59,6 +59,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `critical-css`     | Inlines per-template critical CSS and defers full stylesheets via media="print" onload                   |
 | `meta-description` | Cleans Yoast meta description output, smart fallback chain, Arabic-aware truncation                      |
 | `breadcrumbs`      | Suppresses Astra's microdata, repairs Yoast BreadcrumbList `itemListElement`, drops invalid pieces       |
+| `article-schema`   | Upgrades Article -> NewsArticle, adds keywords, multi-res images, speakable, copyright, Arabic wordCount |
 
 ### Disable everything
 
@@ -78,6 +79,7 @@ add_filter( 'astra_child_seo_module_robots',           '__return_false' );
 add_filter( 'astra_child_seo_module_critical_css',     '__return_false' );
 add_filter( 'astra_child_seo_module_meta_description', '__return_false' );
 add_filter( 'astra_child_seo_module_breadcrumbs',      '__return_false' );
+add_filter( 'astra_child_seo_module_article_schema',   '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -131,7 +133,8 @@ astra-child/
 │       ├── robots.php           robots.txt filter (sitemap, scraper blocks)
 │       ├── critical-css.php     Inline critical CSS + defer the rest
 │       ├── meta-description.php Clean Yoast meta description + fallbacks
-│       └── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
+│       ├── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
+│       └── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -355,3 +358,80 @@ add_filter( 'astra_child_seo_breadcrumb_items', function ( $items ) {
 1. Open the affected URL in [Rich Results Test](https://search.google.com/test/rich-results).
 2. Confirm `Breadcrumbs` either passes validation or is no longer present (both are valid outcomes).
 3. In Search Console, click **Validate fix** on the affected URLs and wait 24-48h for re-crawl.
+
+
+
+## Advanced Article schema
+
+Yoast SEO Free emits a sensible Article schema node, but it stops short of the fields that meaningfully improve Rich Result and Discover eligibility. The `article-schema` module fills the gaps without disabling Yoast.
+
+### What it adds to every singular post
+
+- `@type: NewsArticle` (when the post is detected as news - see below).
+- `articleSection` from the Yoast primary category, or the first category as a fallback.
+- `keywords` built from the post tags (comma-separated).
+- `image` as an array of multiple resolutions of the featured image (full / large / medium_large) so Google Discover can pick the best aspect ratio.
+- `thumbnailUrl` separate from `image`.
+- `speakable` SpeakableSpecification covering the headline and first paragraph - useful for Google Assistant TTS, especially on Arabic content.
+- `copyrightYear` (from publication date) and `copyrightHolder` (linked to the existing Organization node).
+- `wordCount` computed with a Unicode-aware split that counts Arabic words correctly.
+
+### NewsArticle detection
+
+A post is treated as `NewsArticle` when **any** of the following is true:
+
+- It belongs to a category whose slug or name is in the news list. Default list: `news`, `أخبار`, `اخبار`.
+- Its post type is in the news post-type list. Default list: `news`.
+- It has post meta `_is_news` set to a truthy value.
+
+Customize each:
+
+```php
+// Treat additional categories as news.
+add_filter( 'astra_child_seo_news_categories', function ( $cats ) {
+    $cats[] = 'breaking';
+    $cats[] = 'عاجل';
+    return $cats;
+} );
+
+// Use a custom post type for news.
+add_filter( 'astra_child_seo_news_post_types', fn() => array( 'news', 'breaking' ) );
+
+// Or decide per-post with arbitrary logic.
+add_filter( 'astra_child_seo_is_news_post', function ( $is_news, $post ) {
+    if ( has_term( 'live', 'event-status', $post ) ) {
+        return true;
+    }
+    return $is_news;
+}, 10, 2 );
+```
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_article_schema', '__return_false' );
+
+// Keep Yoast's image as-is (don't replace with the multi-res array).
+add_filter( 'astra_child_seo_article_replace_images', '__return_false' );
+
+// Skip speakable.
+add_filter( 'astra_child_seo_article_enable_speakable', '__return_false' );
+
+// Customize speakable selectors.
+add_filter( 'astra_child_seo_article_speakable_selectors', function () {
+    return array( 'h1.entry-title', '.lede', '.entry-content p:first-of-type' );
+} );
+
+// Final tweak: inject any extra fields (sponsor, isAccessibleForFree, video).
+add_filter( 'astra_child_seo_article_data', function ( $data, $post, $context ) {
+    $data['isAccessibleForFree'] = true;
+    return $data;
+}, 10, 3 );
+```
+
+### Verifying
+
+1. Open a published post in [Rich Results Test](https://search.google.com/test/rich-results).
+2. Confirm the Article (or NewsArticle) section shows `articleSection`, `keywords`, multi-resolution `image`, `speakable`, `wordCount`, and `copyrightYear`.
+3. For news posts, confirm `@type` reads `NewsArticle`, not `Article`.
