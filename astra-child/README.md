@@ -60,6 +60,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `meta-description` | Cleans Yoast meta description output, smart fallback chain, Arabic-aware truncation                      |
 | `breadcrumbs`      | Suppresses Astra's microdata, repairs Yoast BreadcrumbList `itemListElement`, drops invalid pieces       |
 | `article-schema`   | Upgrades Article -> NewsArticle, adds keywords, multi-res images, speakable, copyright, Arabic wordCount |
+| `internal-linking` | Auto-links keyword phrases to internal URLs and appends a related-posts block (with `[related_posts]` shortcode) |
 
 ### Disable everything
 
@@ -80,6 +81,7 @@ add_filter( 'astra_child_seo_module_critical_css',     '__return_false' );
 add_filter( 'astra_child_seo_module_meta_description', '__return_false' );
 add_filter( 'astra_child_seo_module_breadcrumbs',      '__return_false' );
 add_filter( 'astra_child_seo_module_article_schema',   '__return_false' );
+add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -134,7 +136,8 @@ astra-child/
 │       ├── critical-css.php     Inline critical CSS + defer the rest
 │       ├── meta-description.php Clean Yoast meta description + fallbacks
 │       ├── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
-│       └── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
+│       ├── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
+│       └── internal-linking.php Keyword auto-linking + related posts block
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -435,3 +438,74 @@ add_filter( 'astra_child_seo_article_data', function ( $data, $post, $context ) 
 1. Open a published post in [Rich Results Test](https://search.google.com/test/rich-results).
 2. Confirm the Article (or NewsArticle) section shows `articleSection`, `keywords`, multi-resolution `image`, `speakable`, `wordCount`, and `copyrightYear`.
 3. For news posts, confirm `@type` reads `NewsArticle`, not `Article`.
+
+
+
+## Internal linking
+
+Two complementary tools that strengthen the internal link graph of the site without manual editor work.
+
+### 1) Keyword auto-linking
+
+Go to **Settings -> Internal Links** and add one entry per line in the form `keyword | URL`:
+
+```
+WordPress | https://pyarabic.com/wordpress-guide
+بايثون | https://pyarabic.com/python-intro
+Yoast SEO | https://pyarabic.com/yoast-seo-tutorial
+```
+
+The first occurrence of each keyword in any singular post is converted into an `<a class="ac-internal-link">` link. The replacement uses `DOMDocument` so:
+
+- Text inside `<a>`, `<code>`, `<pre>`, `<kbd>`, `<samp>`, `<h1>`-`<h6>`, `<script>`, `<style>`, `<input>`, `<textarea>`, `<button>`, and `<svg>` is never touched.
+- Self-links (linking the current page back to itself) are skipped.
+- Each keyword links once per post.
+- Total per-post auto-links cap at 5 (filterable).
+
+```php
+// Add or override pairs in code (e.g. from a site plugin).
+add_filter( 'astra_child_il_link_map', function ( $map ) {
+    $map['ووردبريس'] = home_url( '/wp-guide/' );
+    return $map;
+} );
+
+// Raise or lower the per-post link cap.
+add_filter( 'astra_child_il_max_links_per_post', fn() => 8 );
+```
+
+### 2) Related posts
+
+After every single post, an accessible `<aside class="ac-related-posts">` block is appended showing 4 posts that share at least one tag or category with the current one. Results are cached per post for 1 hour using transients (busted on `save_post` / `deleted_post`). If a post has fewer than 4 related candidates, the list is padded with the latest posts so the block never feels empty.
+
+#### Manual placement
+
+Drop the shortcode anywhere inside content. The automatic append is then suppressed for that post:
+
+```
+[related_posts count="6" title="اقرأ أيضاً"]
+```
+
+#### Configuration
+
+```php
+// Disable the auto-append while keeping the shortcode.
+add_filter( 'astra_child_il_auto_append_related', '__return_false' );
+
+// Change the default count.
+add_filter( 'astra_child_il_related_count', fn() => 6 );
+
+// Override the heading.
+add_filter( 'astra_child_il_related_title', fn() => 'مقالات مشابهة قد تعجبك' );
+
+// Tweak the underlying WP_Query args (e.g. limit to a category).
+add_filter( 'astra_child_il_related_query_args', function ( $args, $post_id ) {
+    $args['cat'] = 12;
+    return $args;
+}, 10, 2 );
+```
+
+#### Disable the whole module
+
+```php
+add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
+```

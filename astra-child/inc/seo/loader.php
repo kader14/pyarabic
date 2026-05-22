@@ -34,6 +34,7 @@ function astra_child_seo_modules() {
 		'meta_description' => true,
 		'breadcrumbs'      => true,
 		'article_schema'   => true,
+		'internal_linking' => true,
 	);
 }
 
