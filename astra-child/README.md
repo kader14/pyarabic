@@ -58,6 +58,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `robots`           | Adds sitemap, scraper-bot blocks, and low-value endpoint disallows when WP generates robots.txt          |
 | `critical-css`     | Inlines per-template critical CSS and defers full stylesheets via media="print" onload                   |
 | `meta-description` | Cleans Yoast meta description output, smart fallback chain, Arabic-aware truncation                      |
+| `breadcrumbs`      | Suppresses Astra's microdata, repairs Yoast BreadcrumbList `itemListElement`, drops invalid pieces       |
 
 ### Disable everything
 
@@ -76,6 +77,7 @@ add_filter( 'astra_child_seo_module_images',           '__return_false' );
 add_filter( 'astra_child_seo_module_robots',           '__return_false' );
 add_filter( 'astra_child_seo_module_critical_css',     '__return_false' );
 add_filter( 'astra_child_seo_module_meta_description', '__return_false' );
+add_filter( 'astra_child_seo_module_breadcrumbs',      '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -128,7 +130,8 @@ astra-child/
 │       ├── images.php           Alt-text fallback for images
 │       ├── robots.php           robots.txt filter (sitemap, scraper blocks)
 │       ├── critical-css.php     Inline critical CSS + defer the rest
-│       └── meta-description.php Clean Yoast meta description + fallbacks
+│       ├── meta-description.php Clean Yoast meta description + fallbacks
+│       └── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -310,3 +313,45 @@ add_filter( 'astra_child_seo_metadesc_admin_notice', '__return_false' );
 - Runs at priority 99 on `wpseo_metadesc`, `wpseo_opengraph_desc`, `wpseo_twitter_description` so it is the last word.
 - Uses `mb_strlen` / `mb_substr` so Arabic letters are counted correctly.
 - The autosave handler only fills `_yoast_wpseo_metadesc` when it's empty; manually crafted descriptions are never overwritten.
+
+## Breadcrumb schema
+
+Fixes the Search Console error **`Missing field "itemListElement" (in "BreadcrumbList")`** that Yoast SEO Free can emit on some pages where the trail collapses to a single item, and removes the duplicate microdata Astra prints on its breadcrumbs.
+
+### What it does
+
+1. **Silences Astra's breadcrumb microdata** so Yoast's JSON-LD is the single source of truth. Astra still renders the visible breadcrumbs - only the structured-data attributes are stripped.
+2. **Validates `wpseo_schema_breadcrumb`** at priority 99. If `itemListElement` is missing, empty, or has fewer than 2 items, the module either:
+   - rebuilds the trail from the current request (post categories, page hierarchy, taxonomy ancestors, search query, author, archive, 404, etc.), or
+   - returns `false` to remove the BreadcrumbList from the JSON-LD `@graph` - cleaner than emitting an invalid one.
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_breadcrumbs', '__return_false' );
+
+// Keep Astra's breadcrumb schema (not recommended).
+add_filter( 'astra_child_seo_breadcrumbs_disable_astra_schema', '__return_false' );
+
+// Customize the rebuilt items - e.g. prepend a "Blog" segment.
+add_filter( 'astra_child_seo_breadcrumb_items', function ( $items ) {
+    array_splice( $items, 1, 0, array( array(
+        '@type'    => 'ListItem',
+        'position' => 99,
+        'name'     => 'Blog',
+        'item'     => home_url( '/blog/' ),
+    ) ) );
+    // Re-number positions so they stay 1..n.
+    foreach ( $items as $i => &$item ) {
+        $item['position'] = $i + 1;
+    }
+    return $items;
+} );
+```
+
+### Verifying the fix
+
+1. Open the affected URL in [Rich Results Test](https://search.google.com/test/rich-results).
+2. Confirm `Breadcrumbs` either passes validation or is no longer present (both are valid outcomes).
+3. In Search Console, click **Validate fix** on the affected URLs and wait 24-48h for re-crawl.

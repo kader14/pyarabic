@@ -32,6 +32,7 @@ function astra_child_seo_modules() {
 		'robots'           => true,
 		'critical_css'     => true,
 		'meta_description' => true,
+		'breadcrumbs'      => true,
 	);
 }
 
