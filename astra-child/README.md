@@ -48,15 +48,16 @@ To turn the AdSense script off entirely, return an empty client ID from the filt
 
 All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They are designed to **complement Yoast SEO Free**, not replace it.
 
-| Module          | Purpose                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `performance`   | Adds `preconnect` / `dns-prefetch` for AdSense and Google fonts, disables emojis, defers non-critical JS |
-| `arabic`        | Forces `ar_AR` Open Graph locale, larger excerpt, RTL-friendly breadcrumb separator, hreflang fallback   |
-| `yoast-tweaks`  | Lower priority for Yoast metabox, default Twitter handle, default OG image, Article publisher in schema  |
-| `schema-extras` | `[faq]` / `[faq_item]` shortcodes that emit FAQPage JSON-LD plus a styled accordion                      |
-| `images`        | Auto alt fallback (attachment title or post title) for images missing alt text                           |
-| `robots`        | Adds sitemap, scraper-bot blocks, and low-value endpoint disallows when WP generates robots.txt          |
-| `critical-css`  | Inlines per-template critical CSS and defers full stylesheets via media="print" onload                   |
+| Module             | Purpose                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| `performance`      | Adds `preconnect` / `dns-prefetch` for AdSense and Google fonts, disables emojis, defers non-critical JS |
+| `arabic`           | Forces `ar_AR` Open Graph locale, larger excerpt, RTL-friendly breadcrumb separator, hreflang fallback   |
+| `yoast-tweaks`     | Lower priority for Yoast metabox, default Twitter handle, default OG image, Article publisher in schema  |
+| `schema-extras`    | `[faq]` / `[faq_item]` shortcodes that emit FAQPage JSON-LD plus a styled accordion                      |
+| `images`           | Auto alt fallback (attachment title or post title) for images missing alt text                           |
+| `robots`           | Adds sitemap, scraper-bot blocks, and low-value endpoint disallows when WP generates robots.txt          |
+| `critical-css`     | Inlines per-template critical CSS and defers full stylesheets via media="print" onload                   |
+| `meta-description` | Cleans Yoast meta description output, smart fallback chain, Arabic-aware truncation                      |
 
 ### Disable everything
 
@@ -67,13 +68,14 @@ add_filter( 'astra_child_load_seo', '__return_false' );
 ### Disable a single module
 
 ```php
-add_filter( 'astra_child_seo_module_performance',   '__return_false' );
-add_filter( 'astra_child_seo_module_arabic',        '__return_false' );
-add_filter( 'astra_child_seo_module_yoast_tweaks',  '__return_false' );
-add_filter( 'astra_child_seo_module_schema_extras', '__return_false' );
-add_filter( 'astra_child_seo_module_images',        '__return_false' );
-add_filter( 'astra_child_seo_module_robots',        '__return_false' );
-add_filter( 'astra_child_seo_module_critical_css',  '__return_false' );
+add_filter( 'astra_child_seo_module_performance',      '__return_false' );
+add_filter( 'astra_child_seo_module_arabic',           '__return_false' );
+add_filter( 'astra_child_seo_module_yoast_tweaks',     '__return_false' );
+add_filter( 'astra_child_seo_module_schema_extras',    '__return_false' );
+add_filter( 'astra_child_seo_module_images',           '__return_false' );
+add_filter( 'astra_child_seo_module_robots',           '__return_false' );
+add_filter( 'astra_child_seo_module_critical_css',     '__return_false' );
+add_filter( 'astra_child_seo_module_meta_description', '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -125,7 +127,8 @@ astra-child/
 │       ├── schema-extras.php    [faq] shortcode + FAQPage JSON-LD
 │       ├── images.php           Alt-text fallback for images
 │       ├── robots.php           robots.txt filter (sitemap, scraper blocks)
-│       └── critical-css.php     Inline critical CSS + defer the rest
+│       ├── critical-css.php     Inline critical CSS + defer the rest
+│       └── meta-description.php Clean Yoast meta description + fallbacks
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -261,3 +264,49 @@ add_filter( 'astra_child_seo_critical_css_template', function ( $template ) {
 - Skipped for: admin screens, feeds, AMP endpoints, Customizer preview, and logged-in editors (so editing always shows the full design).
 - Critical CSS is inlined as `<style id="ac-critical-css" data-version="...">` at priority 1 on `wp_head`, before any other tag.
 - Deferred stylesheets are marked with `data-ac-deferred="1"` so they're easy to spot in DevTools.
+
+## Strong meta descriptions
+
+Yoast SEO Free relies on the editor to type a description per post; when it isn't typed, Yoast falls back to a raw excerpt that is often noisy (shortcodes, byline, emoji, abrupt truncation). The `meta-description` module fixes this without taking control away from Yoast.
+
+### What it does
+
+1. **Cleans** every description Yoast emits: strips shortcodes, HTML, emoji, decodes entities, removes leading "By Author |" patterns, collapses whitespace.
+2. **Falls back** when Yoast's value is empty or shorter than 80 chars. The chain is:
+   - manual post excerpt
+   - first paragraph of post content
+   - term description (for category/tag/taxonomy archives)
+   - author bio (for author archives)
+   - site tagline (last resort)
+3. **Trims** to a max of 155 chars without breaking words and adds a Unicode ellipsis (`...`).
+4. **Filters** Open Graph and Twitter description fields too, so social previews stay consistent with search results.
+
+### Configuration
+
+```php
+// Adjust length thresholds.
+add_filter( 'astra_child_seo_metadesc_min', fn() => 100 );  // shorter than this triggers fallback
+add_filter( 'astra_child_seo_metadesc_max', fn() => 160 );  // hard truncate
+
+// Append a fixed CTA to every description.
+add_filter( 'astra_child_seo_metadesc_final', function ( $desc ) {
+    return rtrim( $desc, '...' ) . ' - pyarabic.com';
+} );
+
+// Pre-fill Yoast meta description on save (off by default).
+// When enabled, the cleaned fallback is written into _yoast_wpseo_metadesc
+// only if the editor left the field blank.
+add_filter( 'astra_child_seo_metadesc_autosave', '__return_true' );
+
+// Limit autosave to specific post types.
+add_filter( 'astra_child_seo_metadesc_post_types', fn() => array( 'post' ) );
+
+// Hide the admin notice that warns about missing descriptions.
+add_filter( 'astra_child_seo_metadesc_admin_notice', '__return_false' );
+```
+
+### Behavior notes
+
+- Runs at priority 99 on `wpseo_metadesc`, `wpseo_opengraph_desc`, `wpseo_twitter_description` so it is the last word.
+- Uses `mb_strlen` / `mb_substr` so Arabic letters are counted correctly.
+- The autosave handler only fills `_yoast_wpseo_metadesc` when it's empty; manually crafted descriptions are never overwritten.
