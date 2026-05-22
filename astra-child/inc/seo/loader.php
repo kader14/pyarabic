@@ -24,13 +24,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function astra_child_seo_modules() {
 	return array(
-		'performance'   => true,
-		'arabic'        => true,
-		'yoast_tweaks'  => true,
-		'schema_extras' => true,
-		'images'        => true,
-		'robots'        => true,
-		'critical_css'  => true,
+		'performance'      => true,
+		'arabic'           => true,
+		'yoast_tweaks'     => true,
+		'schema_extras'    => true,
+		'images'           => true,
+		'robots'           => true,
+		'critical_css'     => true,
+		'meta_description' => true,
 	);
 }
 
