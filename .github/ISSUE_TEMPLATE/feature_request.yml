@@ -1,0 +1,67 @@
+name: Feature request
+description: Suggest a new SEO module, new filter, or other improvement.
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the proposal. Please open the request **before** writing
+        code so we can agree on scope and naming.
+
+        SEO modules in this repo are designed to *complement* Yoast SEO Free,
+        not replace it. Proposals that duplicate or conflict with Yoast
+        functionality will usually be rejected.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user-visible problem does this feature solve?
+      placeholder: |
+        Long Arabic posts have no Table of Contents, so readers have to scroll
+        to find specific sections.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        Describe how it should work. Include the proposed module slug, any
+        new filter names, defaults, and the contexts it should skip
+        (admin / REST / AJAX / feed / AMP / Customizer).
+      placeholder: |
+        Add a `toc` module that auto-generates a nested h2/h3 list at the top
+        of long single posts. Defaults: 500-word minimum, 3-heading minimum,
+        both filterable. Skipped in admin, REST, AJAX, feeds, AMP, and the
+        Customizer preview.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Plugins, manual workarounds, why they fall short.
+
+  - type: textarea
+    id: yoast
+    attributes:
+      label: Conflict with Yoast SEO Free?
+      description: |
+        Confirm this feature does not duplicate or conflict with Yoast.
+        If it builds on Yoast, list the Yoast filter or hook it integrates with.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [open issues](https://github.com/kader14/pyarabic/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I have read [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+          required: true

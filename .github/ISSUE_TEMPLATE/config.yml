@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kader14/pyarabic/security/advisories/new
+    about: |
+      Do not file public issues for security problems. Use a private security
+      advisory or follow the steps in SECURITY.md.
+  - name: Astra parent theme support
+    url: https://wpastra.com/support/
+    about: Bugs in the Astra parent theme should be reported upstream.
+  - name: Yoast SEO support
+    url: https://wordpress.org/support/plugin/wordpress-seo/
+    about: Bugs in the Yoast SEO plugin should be reported upstream.
