@@ -63,6 +63,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `internal-linking` | Auto-links keyword phrases to internal URLs and appends a related-posts block (with `[related_posts]` shortcode) |
 | `early-hints`      | Preloads critical resources (CSS, featured image) via `<link rel=preload>` and `Link:` headers - Cloudflare promotes to 103 |
 | `query-strings`    | Strips `?ver=...` cache-buster query strings from local CSS/JS so edge caches and CDNs can fully cache them                  |
+| `toc`              | Auto-generated Table of Contents for long posts: nested h2/h3 list, anchor IDs, smooth scroll, `[toc]` shortcode             |
 
 ### Disable everything
 
@@ -86,6 +87,7 @@ add_filter( 'astra_child_seo_module_article_schema',   '__return_false' );
 add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
 add_filter( 'astra_child_seo_module_early_hints',      '__return_false' );
 add_filter( 'astra_child_seo_module_query_strings',    '__return_false' );
+add_filter( 'astra_child_seo_module_toc',              '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -630,3 +632,68 @@ add_filter( 'astra_child_seo_qs_param_names', function ( $params ) {
    curl -s https://pyarabic.com/some-post/ | grep -oE '(href|src)="[^"]+\.(css|js)[^"]*"' | grep '\?ver='
    ```
    Should return zero matches for local URLs.
+
+
+
+## Auto Table of Contents
+
+Adds an automatic TOC to long single posts. Builds a nested ordered list from h2 / h3 headings, gives each heading an anchor `id` (Arabic-friendly slug via `sanitize_title()`), and renders an accessible `<details>` element so the TOC can be collapsed without any JavaScript.
+
+### When it activates
+
+- Singular post, in the main loop, on the front end.
+- Content has at least 500 words (filterable).
+- Content has at least 3 matching headings (filterable).
+
+If the editor places a `[toc]` shortcode somewhere in the content, those word/heading thresholds are bypassed and the TOC renders exactly where the shortcode is.
+
+### Manual placement
+
+```
+[toc]
+```
+
+That single line acts as a placeholder. The module's `the_content` filter replaces it with the rendered TOC after collecting the headings.
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_toc', '__return_false' );
+
+// Or disable just at runtime (e.g. on a specific category).
+add_filter( 'astra_child_seo_toc_enabled', function ( $enabled ) {
+    if ( in_category( 'no-toc' ) ) {
+        return false;
+    }
+    return $enabled;
+} );
+
+// Include h4 in the TOC.
+add_filter( 'astra_child_seo_toc_levels', fn() => array( 'h2', 'h3', 'h4' ) );
+
+// Lower the word threshold for how long is "long enough".
+add_filter( 'astra_child_seo_toc_min_words', fn() => 300 );
+
+// Show the TOC even with just two headings.
+add_filter( 'astra_child_seo_toc_min_headings', fn() => 2 );
+
+// Translate the title.
+add_filter( 'astra_child_seo_toc_title', fn() => 'محتويات المقال' );
+
+// Render as a non-collapsible <nav> instead of <details>.
+add_filter( 'astra_child_seo_toc_collapsible', '__return_false' );
+
+// Disable auto insertion (keeps the [toc] shortcode working).
+add_filter( 'astra_child_seo_toc_auto_insert', '__return_false' );
+
+// Tune the scroll offset to match a sticky header height.
+add_filter( 'astra_child_seo_toc_scroll_offset', fn() => 120 );
+```
+
+### Behavior notes
+
+- The filter runs on `the_content` at priority 11. Headings get `id` attributes added even if the post is too short for a TOC, so other code (e.g. external shares to a section anchor) keeps working.
+- Slugs come from `sanitize_title()`, which preserves Arabic characters and gives clean `id="ما-هو-بايثون"` style anchors.
+- Duplicate headings get auto-numbered (`-2`, `-3`, ...) so anchors stay unique.
+- Smooth scrolling and a configurable `scroll-padding-top` are added on `<html>` to play nicely with sticky headers.
