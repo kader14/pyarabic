@@ -61,6 +61,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `breadcrumbs`      | Suppresses Astra's microdata, repairs Yoast BreadcrumbList `itemListElement`, drops invalid pieces       |
 | `article-schema`   | Upgrades Article -> NewsArticle, adds keywords, multi-res images, speakable, copyright, Arabic wordCount |
 | `internal-linking` | Auto-links keyword phrases to internal URLs and appends a related-posts block (with `[related_posts]` shortcode) |
+| `early-hints`      | Preloads critical resources (CSS, featured image) via `<link rel=preload>` and `Link:` headers - Cloudflare promotes to 103 |
 
 ### Disable everything
 
@@ -82,6 +83,7 @@ add_filter( 'astra_child_seo_module_meta_description', '__return_false' );
 add_filter( 'astra_child_seo_module_breadcrumbs',      '__return_false' );
 add_filter( 'astra_child_seo_module_article_schema',   '__return_false' );
 add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
+add_filter( 'astra_child_seo_module_early_hints',      '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -137,7 +139,8 @@ astra-child/
 │       ├── meta-description.php Clean Yoast meta description + fallbacks
 │       ├── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
 │       ├── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
-│       └── internal-linking.php Keyword auto-linking + related posts block
+│       ├── internal-linking.php Keyword auto-linking + related posts block
+│       └── early-hints.php      Preload critical resources via <link> + Link: header
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -509,3 +512,62 @@ add_filter( 'astra_child_il_related_query_args', function ( $args, $post_id ) {
 ```php
 add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
 ```
+
+
+## Early Hints
+
+Speeds up Largest Contentful Paint by telling the browser which resources to start fetching before the full HTML body has been parsed.
+
+The same configuration drives three layers of behavior, all activated automatically:
+
+1. `<link rel="preload">` tags injected at the very top of `<head>`. Works in every browser and on every host, with no infrastructure changes.
+2. `Link:` HTTP response headers carrying the same hints. Reverse proxies and CDNs (Cloudflare, Fastly, mod_http2) read them and either preload eagerly or, on supporting hosts, materialize an actual `103 Early Hints` interim response that lands on the client before PHP has finished building the page.
+3. When the origin sits behind **Cloudflare** with Early Hints enabled in the dashboard, the same `Link:` headers are promoted to a real `103` automatically - giving you the full Early Hints win without writing any platform-specific code.
+
+### What gets preloaded by default
+
+- Astra parent stylesheet (`style.min.css` if present, otherwise `style.css`).
+- The child theme stylesheet.
+- The post's featured image at the `large` size, with `imagesrcset` / `imagesizes` for responsive variants. Skipped on archive / search / 404 pages where there is no clear LCP image.
+
+The total list is capped at 5 entries so we never over-push and waste bandwidth.
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_early_hints', '__return_false' );
+
+// Or disable just at runtime (e.g. on staging).
+add_filter( 'astra_child_seo_early_hints_enabled', '__return_false' );
+
+// Cap the number of hints (default 5).
+add_filter( 'astra_child_seo_early_hints_max', fn() => 3 );
+
+// Add a hero image used on category archives so it gets preloaded too.
+add_filter( 'astra_child_seo_early_hints_resources', function ( $resources ) {
+    if ( is_category( 'featured' ) ) {
+        $resources[] = array(
+            'href' => 'https://pyarabic.com/wp-content/uploads/featured-hero.jpg',
+            'as'   => 'image',
+        );
+    }
+    return $resources;
+} );
+
+// Preload a self-hosted Arabic font.
+add_filter( 'astra_child_seo_early_hints_resources', function ( $resources ) {
+    $resources[] = array(
+        'href' => get_stylesheet_directory_uri() . '/fonts/Cairo-Regular.woff2',
+        'as'   => 'font',
+        'type' => 'font/woff2',
+    );
+    return $resources;
+} );
+```
+
+### Verifying
+
+1. Open a single post URL and view source - the first lines inside `<head>` should be `<link rel="preload" ...>` tags.
+2. From a terminal: `curl -sI https://pyarabic.com/some-post/ | grep -i ^link` - the response should include a `Link:` header listing the same resources.
+3. On Cloudflare-fronted sites, enable **Speed -> Optimization -> Early Hints** in the dashboard and run [WebPageTest](https://webpagetest.org/) - the waterfall should show resources starting before the main document finishes downloading.
