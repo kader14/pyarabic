@@ -62,6 +62,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `article-schema`   | Upgrades Article -> NewsArticle, adds keywords, multi-res images, speakable, copyright, Arabic wordCount |
 | `internal-linking` | Auto-links keyword phrases to internal URLs and appends a related-posts block (with `[related_posts]` shortcode) |
 | `early-hints`      | Preloads critical resources (CSS, featured image) via `<link rel=preload>` and `Link:` headers - Cloudflare promotes to 103 |
+| `query-strings`    | Strips `?ver=...` cache-buster query strings from local CSS/JS so edge caches and CDNs can fully cache them                  |
 
 ### Disable everything
 
@@ -84,6 +85,7 @@ add_filter( 'astra_child_seo_module_breadcrumbs',      '__return_false' );
 add_filter( 'astra_child_seo_module_article_schema',   '__return_false' );
 add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
 add_filter( 'astra_child_seo_module_early_hints',      '__return_false' );
+add_filter( 'astra_child_seo_module_query_strings',    '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -140,7 +142,8 @@ astra-child/
 │       ├── breadcrumbs.php      Repair Yoast BreadcrumbList, suppress Astra microdata
 │       ├── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
 │       ├── internal-linking.php Keyword auto-linking + related posts block
-│       └── early-hints.php      Preload critical resources via <link> + Link: header
+│       ├── early-hints.php      Preload critical resources via <link> + Link: header
+│       └── query-strings.php    Strip cache-buster query strings from local CSS/JS
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -571,3 +574,59 @@ add_filter( 'astra_child_seo_early_hints_resources', function ( $resources ) {
 1. Open a single post URL and view source - the first lines inside `<head>` should be `<link rel="preload" ...>` tags.
 2. From a terminal: `curl -sI https://pyarabic.com/some-post/ | grep -i ^link` - the response should include a `Link:` header listing the same resources.
 3. On Cloudflare-fronted sites, enable **Speed -> Optimization -> Early Hints** in the dashboard and run [WebPageTest](https://webpagetest.org/) - the waterfall should show resources starting before the main document finishes downloading.
+
+
+
+## Remove cache-buster query strings
+
+WordPress, Astra, and most plugins append a version query string to every CSS and JS URL: `style.min.css?ver=4.6.0`. Many edge caches and reverse proxies are configured to skip caching of any URL with a query string, even when the underlying file is static. PageSpeed Insights and GTmetrix audits flag this as **"Remove query strings from static resources"**.
+
+The `query-strings` module fixes that by filtering `style_loader_src` and `script_loader_src` and stripping the conventional cache-buster parameters (`ver`, `v`, `rev`, `cb`, `ts`, `_`).
+
+### Behavior
+
+- Runs only on front-end requests. Admin, REST, AJAX, feeds, AMP, and Customizer preview keep their original URLs (the Customizer iframe needs the version to refresh while editing).
+- Touches only URLs that point to the same host as the site. Third-party CDNs (e.g. fonts.googleapis.com, AdSense) are left alone.
+- Other unrelated query parameters (e.g. signed CDN tokens) are preserved - only the cache-buster names are removed.
+
+### Trade-off
+
+Once `?ver=` is gone, browsers cache the asset under its bare URL. After you ship a CSS/JS change, returning visitors will not see it until their own cache expires unless you either:
+
+- rename the file (e.g. `style.css` -> `style.v2.css`),
+- bump the file's `filemtime()` (which most caching plugins do automatically), or
+- click "purge cache" in your caching plugin / CDN.
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_query_strings', '__return_false' );
+
+// Or disable just at runtime (e.g. on staging).
+add_filter( 'astra_child_seo_remove_query_strings_enabled', '__return_false' );
+
+// Keep query strings on a specific URL (e.g. a configurator script).
+add_filter( 'astra_child_seo_remove_query_strings', function ( $strip, $src ) {
+    if ( false !== strpos( $src, '/configurator.js' ) ) {
+        return false;
+    }
+    return $strip;
+}, 10, 2 );
+
+// Strip extra parameter names that some plugin uses as cache-buster.
+add_filter( 'astra_child_seo_qs_param_names', function ( $params ) {
+    $params[] = 'asset_ver';
+    return $params;
+} );
+```
+
+### Verifying
+
+1. View page source on a single post and search for `?ver=` - there should be no occurrences inside `<link>` / `<script>` tags pointing to your own host.
+2. Run [PageSpeed Insights](https://pagespeed.web.dev/) - the "Remove query strings from static resources" or "Use efficient cache policy" warnings should drop or disappear for first-party files.
+3. From a terminal:
+   ```bash
+   curl -s https://pyarabic.com/some-post/ | grep -oE '(href|src)="[^"]+\.(css|js)[^"]*"' | grep '\?ver='
+   ```
+   Should return zero matches for local URLs.
