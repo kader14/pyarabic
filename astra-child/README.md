@@ -118,6 +118,12 @@ add_filter( 'astra_child_seo_blocking_script_prefixes', function ( $prefixes ) {
     $prefixes[] = 'prism-';        // also keep Prism.js synchronous, etc.
     return $prefixes;
 } );
+
+// Force a different image size for og:image / twitter:image.
+// Default is 'full' so Google honours max-image-preview:large
+// (which needs >= 1200px wide). Set to 'large' to revert to Yoast's
+// historic default, or any registered size.
+add_filter( 'astra_child_seo_og_image_size', fn() => 'full' );
 ```
 
 ## FAQ shortcode usage
