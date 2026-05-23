@@ -65,6 +65,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `query-strings`    | Strips `?ver=...` cache-buster query strings from local CSS/JS so edge caches and CDNs can fully cache them                  |
 | `toc`              | Auto-generated Table of Contents for long posts: nested h2/h3 list, anchor IDs, smooth scroll, `[toc]` shortcode             |
 | `serp-ctr`         | Robots `max-image-preview:large`, year auto-stamp on evergreen titles (opt-in), reading-time signal in Article + Twitter cards |
+| `reading-time-badge` | Frontend reading-time badge ("⏱ 5 دقيقة قراءة") in Astra's meta line, reusing the cached value from `serp-ctr`                |
 
 ### Disable everything
 
@@ -90,6 +91,7 @@ add_filter( 'astra_child_seo_module_early_hints',      '__return_false' );
 add_filter( 'astra_child_seo_module_query_strings',    '__return_false' );
 add_filter( 'astra_child_seo_module_toc',              '__return_false' );
 add_filter( 'astra_child_seo_module_serp_ctr',         '__return_false' );
+add_filter( 'astra_child_seo_module_reading_time_badge', '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -149,7 +151,8 @@ astra-child/
 │       ├── early-hints.php      Preload critical resources via <link> + Link: header
 │       ├── query-strings.php    Strip cache-buster query strings from local CSS/JS
 │       ├── toc.php              Auto Table of Contents for long single posts
-│       └── serp-ctr.php         Robots upgrade, year auto-stamp, reading-time signal
+│       ├── serp-ctr.php         Robots upgrade, year auto-stamp, reading-time signal
+│       └── reading-time-badge.php  Frontend "X دقيقة قراءة" badge near the title
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -807,3 +810,81 @@ add_filter( 'astra_child_seo_module_serp_ctr', '__return_false' );
 2. Open the URL in [Rich Results Test](https://search.google.com/test/rich-results) and confirm the Article node shows `timeRequired: PT<N>M`.
 3. (If year stamp is enabled) confirm the rendered `<title>` reflects the current year.
 4. Re-crawl the URL in Search Console after deploying. CTR changes typically show up in Performance reports within 2-4 weeks.
+
+
+
+
+
+## Reading-time badge (frontend)
+
+Visible counterpart of the reading-time signal that the [SERP CTR](#serp-ctr) module already pushes to Twitter cards (`twitter:label1`/`twitter:data1`) and Article schema (`timeRequired`). Without this module, social previews promise the reader "5 دقيقة قراءة" but the actual page doesn't show it - this module closes that loop.
+
+### Where it renders
+
+By default it sits **inside Astra's single-post meta line**, next to the date and author:
+
+```
+23 مايو · أحمد · ⏱ 5 دقيقة قراءة
+```
+
+If the parent theme isn't Astra (`ASTRA_THEME_VERSION` not defined), the module falls back automatically to prepending a small line at the top of the post content. You can also force either placement explicitly:
+
+```php
+// Force the meta line (Astra) - silently no-ops on non-Astra themes.
+add_filter( 'astra_child_seo_reading_badge_position', fn() => 'meta' );
+
+// Force prepended-to-content placement (works on every theme).
+add_filter( 'astra_child_seo_reading_badge_position', fn() => 'content' );
+```
+
+### Where the data comes from
+
+The module reads the cached value from the `serp-ctr` module's
+`astra_child_seo_ctr_reading_time()` helper - no extra database hit, no
+extra calculation per pageview. If `serp-ctr` is disabled, this module
+silently no-ops because there is no real reading-time number to display.
+
+### Customization
+
+```php
+// Disable the whole module.
+add_filter( 'astra_child_seo_module_reading_time_badge', '__return_false' );
+
+// Or disable just at runtime (e.g. on a specific category).
+add_filter( 'astra_child_seo_reading_badge_enabled', function ( $enabled ) {
+    return ! in_category( 'shorts' );
+} );
+
+// Translate or restyle the format (sprintf, %d is minutes).
+add_filter( 'astra_child_seo_reading_badge_format', fn() => 'وقت القراءة: %d دقيقة' );
+add_filter( 'astra_child_seo_reading_badge_format', fn() => '⏱ %d min read' );
+
+// Hide the badge for very short posts. Default 1; set to 2 to hide
+// 1-minute reads, 3 to hide 1-2 minute reads, etc.
+add_filter( 'astra_child_seo_reading_badge_min_minutes', fn() => 2 );
+
+// Show on pages and a custom post type as well.
+add_filter( 'astra_child_seo_reading_badge_post_types', fn() => array( 'post', 'page', 'tutorial' ) );
+```
+
+### Styling
+
+The badge ships with ~250 bytes of inline CSS and uses Astra's CSS custom
+properties when available so it inherits the active palette:
+
+```css
+.ac-reading-time { color: var(--ast-global-color-3, #5b5b5b); font-size: .875em; }
+.ac-reading-time::before { content: "·"; margin: 0 .5em; opacity: .7; }
+.ac-reading-time-line { margin: 0 0 1em; }
+```
+
+Override these from the child theme's `style.css` to match a different
+design system. The badge carries a `data-minutes="5"` attribute so CSS
+can target specific ranges (e.g. add an icon for long reads).
+
+### Behavior notes
+
+- Renders only on `is_singular( 'post' )` by default. Filterable.
+- Skipped in admin, REST, AJAX, feeds, AMP, and the Customizer preview by virtue of `is_singular()` being false in those contexts.
+- The CSS prints once per request and only when the badge will actually render.
+- A request-scoped `$GLOBALS` flag prevents the meta filter and the content fallback from both rendering the badge.

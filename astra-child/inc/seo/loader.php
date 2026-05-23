@@ -39,6 +39,7 @@ function astra_child_seo_modules() {
 		'query_strings'    => true,
 		'toc'              => true,
 		'serp_ctr'         => true,
+		'reading_time_badge' => true,
 	);
 }
 

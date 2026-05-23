@@ -13,6 +13,23 @@ and `robots.txt` that are deployed alongside the theme.
 
 ### Added
 
+- **Reading-time badge** module (`inc/seo/reading-time-badge.php`).
+  Frontend complement to the SERP-side reading-time signal. Renders a
+  small "⏱ N دقيقة قراءة" badge inside Astra's single-post meta line
+  (next to the date and author), with automatic fallback to prepending a
+  small line at the top of `the_content` when the parent theme is not
+  Astra. Reads the cached minutes from
+  `astra_child_seo_ctr_reading_time()` exposed by the `serp-ctr` module
+  so there is no extra calculation per request. Closes the gap where the
+  Twitter card and Article schema advertised a reading time the visible
+  page didn't show. Filters: `astra_child_seo_module_reading_time_badge`,
+  `astra_child_seo_reading_badge_enabled`,
+  `astra_child_seo_reading_badge_position` (`auto`/`meta`/`content`),
+  `astra_child_seo_reading_badge_format`,
+  `astra_child_seo_reading_badge_min_minutes`,
+  `astra_child_seo_reading_badge_post_types`.
+  ([#15](https://github.com/kader14/pyarabic/pull/15))
+
 - **SERP CTR** module (`inc/seo/serp-ctr.php`). Targets the highest-leverage
   organic search click-through-rate levers that Yoast SEO Free does not
   enable by default. Three independent features:
