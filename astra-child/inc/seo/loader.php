@@ -37,6 +37,7 @@ function astra_child_seo_modules() {
 		'internal_linking' => true,
 		'early_hints'      => true,
 		'query_strings'    => true,
+		'toc'              => true,
 	);
 }
 
