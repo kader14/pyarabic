@@ -38,6 +38,7 @@ function astra_child_seo_modules() {
 		'early_hints'      => true,
 		'query_strings'    => true,
 		'toc'              => true,
+		'serp_ctr'         => true,
 	);
 }
 

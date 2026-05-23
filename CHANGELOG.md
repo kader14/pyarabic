@@ -13,6 +13,32 @@ and `robots.txt` that are deployed alongside the theme.
 
 ### Added
 
+- **SERP CTR** module (`inc/seo/serp-ctr.php`). Targets the highest-leverage
+  organic search click-through-rate levers that Yoast SEO Free does not
+  enable by default. Three independent features:
+  - **Robots meta upgrade** via `wp_robots` filter at priority 99: adds
+    `max-snippet:-1`, `max-image-preview:large`, `max-video-preview:-1` to
+    unlock the largest snippet, image, and video previews in SERP. Skipped
+    automatically when the page is already noindex. Documented to lift
+    image-result CTR by 5-15% on rich-content sites and required for full-
+    width Google Discover thumbnails. On by default.
+  - **Year auto-stamp on evergreen titles** via `wpseo_title` (Yoast) and
+    `pre_get_document_title` (core) filters. Detects "guide / best / top /
+    دليل / أفضل / كيفية" patterns (filterable, Arabic + English defaults),
+    refreshes a stale 4-digit year within a configurable window, or
+    appends the current year. Preserves the `" | site-name"` suffix so the
+    year sits next to the headline, not the brand. Off by default; opt-in
+    via `astra_child_seo_ctr_year_stamp_enabled`.
+  - **Reading-time signal** via Yoast `wpseo_schema_article` filter and a
+    direct `wp_head` action. Counts words with Unicode-aware splitting so
+    Arabic content is measured correctly, caches the result on
+    `_astra_child_reading_minutes` post meta (busted on
+    `save_post` / `deleted_post`), and surfaces the value as Article
+    schema `timeRequired` (ISO 8601 `PTnM`) plus Twitter card
+    `twitter:label1` / `twitter:data1` so search and social previews show
+    the reading time without any frontend rendering changes. On by default.
+  ([#14](https://github.com/kader14/pyarabic/pull/14))
+
 - **Auto Table of Contents** module (`inc/seo/toc.php`). Builds a nested
   `<ol>` from h2/h3 headings on long single posts (>= 500 words and >= 3
   matching headings, both filterable). Adds anchor `id` attributes via

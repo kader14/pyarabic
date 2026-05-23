@@ -1,0 +1,28 @@
+# Default reviewer for everything in this repository.
+# Anyone matched by a later, more specific pattern wins.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+*                            @kader14
+
+# Theme code and assets
+/astra-child/                @kader14
+/astra-child/inc/seo/        @kader14
+/astra-child/assets/         @kader14
+
+# Site-level config and reference files
+/header.php                  @kader14
+/robots.txt                  @kader14
+
+# CI, lint config, and community templates
+/.github/                    @kader14
+/phpcs.xml.dist              @kader14
+/.editorconfig               @kader14
+/.gitignore                  @kader14
+
+# Project documentation
+/README.md                   @kader14
+/CHANGELOG.md                @kader14
+/CONTRIBUTING.md             @kader14
+/CODE_OF_CONDUCT.md          @kader14
+/SECURITY.md                 @kader14
+/LICENSE                     @kader14

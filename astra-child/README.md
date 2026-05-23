@@ -64,6 +64,7 @@ All modules live under `inc/seo/` and are loaded by `inc/seo/loader.php`. They a
 | `early-hints`      | Preloads critical resources (CSS, featured image) via `<link rel=preload>` and `Link:` headers - Cloudflare promotes to 103 |
 | `query-strings`    | Strips `?ver=...` cache-buster query strings from local CSS/JS so edge caches and CDNs can fully cache them                  |
 | `toc`              | Auto-generated Table of Contents for long posts: nested h2/h3 list, anchor IDs, smooth scroll, `[toc]` shortcode             |
+| `serp-ctr`         | Robots `max-image-preview:large`, year auto-stamp on evergreen titles (opt-in), reading-time signal in Article + Twitter cards |
 
 ### Disable everything
 
@@ -88,6 +89,7 @@ add_filter( 'astra_child_seo_module_internal_linking', '__return_false' );
 add_filter( 'astra_child_seo_module_early_hints',      '__return_false' );
 add_filter( 'astra_child_seo_module_query_strings',    '__return_false' );
 add_filter( 'astra_child_seo_module_toc',              '__return_false' );
+add_filter( 'astra_child_seo_module_serp_ctr',         '__return_false' );
 ```
 
 ### Per-feature toggles
@@ -145,7 +147,9 @@ astra-child/
 │       ├── article-schema.php   Upgrade Yoast Article schema (NewsArticle, speakable, etc.)
 │       ├── internal-linking.php Keyword auto-linking + related posts block
 │       ├── early-hints.php      Preload critical resources via <link> + Link: header
-│       └── query-strings.php    Strip cache-buster query strings from local CSS/JS
+│       ├── query-strings.php    Strip cache-buster query strings from local CSS/JS
+│       ├── toc.php              Auto Table of Contents for long single posts
+│       └── serp-ctr.php         Robots upgrade, year auto-stamp, reading-time signal
 └── assets/
     └── critical/
         ├── default.css          Fallback critical CSS (used when no template match)
@@ -697,3 +701,109 @@ add_filter( 'astra_child_seo_toc_scroll_offset', fn() => 120 );
 - Slugs come from `sanitize_title()`, which preserves Arabic characters and gives clean `id="ما-هو-بايثون"` style anchors.
 - Duplicate headings get auto-numbered (`-2`, `-3`, ...) so anchors stay unique.
 - Smooth scrolling and a configurable `scroll-padding-top` are added on `<html>` to play nicely with sticky headers.
+
+
+
+
+## SERP CTR
+
+Targets the highest-leverage organic search click-through-rate levers that Yoast SEO Free does not enable by default. Three independent features, each with its own toggle.
+
+### 1) Robots meta upgrade
+
+Yoast Free emits the standard `index, follow` robots meta but does not add the preview-size hints that unlock the largest snippet, image, and video previews in Google SERP. This module adds them via the core `wp_robots` filter:
+
+```html
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+```
+
+Documented to lift image-result CTR by 5-15% on rich-content sites and is required for posts to appear in Google Discover at full width.
+
+The module is **on by default** and skipped when the page is already `noindex`.
+
+```php
+// Disable just this feature.
+add_filter( 'astra_child_seo_ctr_robots_enabled', '__return_false' );
+
+// Or override the directives entirely.
+add_filter( 'astra_child_seo_ctr_robots_directives', function () {
+    return array(
+        'max-snippet'       => '320',  // Limit to a one-line snippet.
+        'max-image-preview' => 'standard',
+        'max-video-preview' => '-1',
+    );
+} );
+```
+
+### 2) Year auto-stamp on evergreen titles
+
+When a singular post title contains a "guide / best / top / دليل / أفضل / كيفية" pattern and either lacks a 4-digit year or carries a stale one (within a configurable window), the module appends or refreshes the year so SERP listings stay current. `"دليل بايثون"` becomes `"دليل بايثون 2026"`; `"Best Python Tools 2024"` becomes `"Best Python Tools 2026"`.
+
+The site-name suffix (e.g. `" | pyarabic.com"`) is preserved - the year is inserted before the separator so titles read `"دليل بايثون 2026 | pyarabic.com"`.
+
+**Off by default** because title rewriting can surprise editors. Enable per-site:
+
+```php
+add_filter( 'astra_child_seo_ctr_year_stamp_enabled', '__return_true' );
+```
+
+#### Tuning
+
+```php
+// Add or replace the evergreen patterns. Match is case-insensitive
+// (mb_stripos) and matches anywhere in the title.
+add_filter( 'astra_child_seo_ctr_evergreen_patterns', function ( $patterns ) {
+    $patterns[] = 'تطور';
+    $patterns[] = 'roundup';
+    return $patterns;
+} );
+
+// How stale a mentioned year can be before we refresh it.
+// Default: 3 - matches 2023, 2024, 2025 against current 2026.
+add_filter( 'astra_child_seo_ctr_year_window', fn() => 5 );
+
+// sprintf-style format used when no year is present.
+// Default: ' %d' so titles get "Title 2026". Use ' (%d)' for parentheses.
+add_filter( 'astra_child_seo_ctr_year_format', fn() => ' (%d)' );
+```
+
+### 3) Reading-time signal
+
+Counts the words in the post once (Arabic-aware via Unicode word splitting), caches the result on `_astra_child_reading_minutes` post meta, and exposes the value in two places:
+
+- **Article schema:** `timeRequired` ISO 8601 duration (`PT5M`) added to Yoast's `wpseo_schema_article` node so search engines can surface the hint.
+- **Twitter card:** `twitter:label1` / `twitter:data1` so Twitter and LinkedIn previews show "وقت القراءة: 5 دقيقة".
+
+The cache is busted automatically on `save_post` and `deleted_post` so the value never lags behind real content.
+
+#### Tuning
+
+```php
+// Disable just this feature.
+add_filter( 'astra_child_seo_ctr_reading_time_enabled', '__return_false' );
+
+// Words-per-minute for the calculation. Default 200 (typical adult reader).
+// Arabic averages a bit lower; 180 is a defensible value.
+add_filter( 'astra_child_seo_ctr_reading_wpm', fn() => 180 );
+
+// Translate / re-brand the Twitter label.
+add_filter( 'astra_child_seo_ctr_reading_label', fn() => 'مدة القراءة' );
+
+// Translate the value template. Receives sprintf( $template, $minutes ).
+add_filter( 'astra_child_seo_ctr_reading_value_format', fn() => '%d دقيقة قراءة' );
+```
+
+### Disable the whole module
+
+```php
+add_filter( 'astra_child_seo_module_serp_ctr', '__return_false' );
+```
+
+### Verifying
+
+1. View page source on a single post and check `<head>`:
+   - `<meta name="robots" content="...max-image-preview:large...">` is present.
+   - `<meta name="twitter:label1" content="وقت القراءة">` and `twitter:data1` are present.
+2. Open the URL in [Rich Results Test](https://search.google.com/test/rich-results) and confirm the Article node shows `timeRequired: PT<N>M`.
+3. (If year stamp is enabled) confirm the rendered `<title>` reflects the current year.
+4. Re-crawl the URL in Search Console after deploying. CTR changes typically show up in Performance reports within 2-4 weeks.

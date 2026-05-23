@@ -1,0 +1,48 @@
+# --- WordPress runtime (this repo only ships the child theme) ----------------
+wp-config.php
+wp-content/uploads/
+*.log
+
+# --- OS / editor noise -------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.history/
+
+# --- PHP / Composer (used for phpcs locally) ---------------------------------
+vendor/
+composer.lock
+.phpcs-cache
+.phpcs.xml
+.phpunit.result.cache
+phpunit.cache/
+
+# --- Node (in case anyone runs penthouse / critical for critical CSS) --------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# --- Build / packaging artifacts --------------------------------------------
+*.zip
+*.tar.gz
+astra-child.zip
+
+# --- Generated screenshots (drop in a real one when ready) -------------------
+astra-child/screenshot.tmp.png
+
+# --- Local environment override ---------------------------------------------
+.env
+.env.local

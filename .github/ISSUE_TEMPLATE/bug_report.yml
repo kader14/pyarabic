@@ -1,0 +1,96 @@
+name: Bug report
+description: A feature of the astra-child theme or supporting files is broken.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in every required field so the
+        maintainer can reproduce the issue without going back and forth.
+
+        For **security** problems, do not use this form. Follow `SECURITY.md`.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear, focused description of the bug.
+      placeholder: The featured image is no longer preloaded on single posts since...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps starting from a fresh load.
+      placeholder: |
+        1. Activate astra-child on a fresh WordPress install
+        2. Visit https://example.com/sample-post/
+        3. Inspect <head>; the <link rel="preload"> tag for the featured image is missing
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: |
+        A <link rel="preload" as="image" href="..."> tag should appear at the
+        top of <head> with the same URL as the featured image.
+    validations:
+      required: true
+
+  - type: input
+    id: theme-version
+    attributes:
+      label: astra-child version
+      description: Read from `astra-child/style.css` (Version line).
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: wp-version
+    attributes:
+      label: WordPress version
+      placeholder: "6.4.2"
+    validations:
+      required: true
+
+  - type: input
+    id: astra-version
+    attributes:
+      label: Astra parent theme version
+      placeholder: "4.6.0"
+    validations:
+      required: true
+
+  - type: input
+    id: yoast-version
+    attributes:
+      label: Yoast SEO version (if relevant)
+      placeholder: "21.7"
+
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+      placeholder: "8.1.27"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or relevant page-source snippets
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [open issues](https://github.com/kader14/pyarabic/issues) and this is not a duplicate.
+          required: true
+        - label: I am running the latest released version of `astra-child`.
+          required: true
