@@ -59,7 +59,7 @@ End-to-end installation steps live in
 
 ## SEO modules at a glance
 
-The child theme ships fourteen toggleable SEO modules under
+The child theme ships fifteen toggleable SEO modules under
 `astra-child/inc/seo/`. Each one is enabled by default and can be turned off
 via a `astra_child_seo_module_<slug>` filter without editing the theme.
 See [`astra-child/README.md`](astra-child/README.md) for the full list and
@@ -81,6 +81,7 @@ filter reference.
 | `early-hints`      | `<link rel=preload>` + `Link:` headers (Cloudflare promotes to HTTP 103)      |
 | `query-strings`    | Strips `?ver=` cache-buster query strings from local CSS / JS                 |
 | `toc`              | Auto Table of Contents on long single posts (collapsible, no JS required)    |
+| `serp-ctr`         | Robots `max-image-preview:large`, year auto-stamp on evergreen titles, reading-time signal in Article + Twitter cards |
 
 ## Requirements
 
