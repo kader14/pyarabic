@@ -131,8 +131,21 @@ add_action( 'init', 'astra_child_seo_disable_embeds', 9999 );
 /**
  * Defer non-critical front-end scripts so they don't block rendering.
  *
- * Keeps jQuery and any handle listed in the filter blocking by default
- * because some themes/plugins still rely on synchronous load order.
+ * Two opt-out mechanisms:
+ *
+ * 1. Exact-match handle list via `astra_child_seo_blocking_scripts`. Handy
+ *    for one-off plugins. jQuery handles default to blocking because plenty
+ *    of legacy themes / plugins still rely on synchronous load order.
+ *
+ * 2. Prefix-match list via `astra_child_seo_blocking_script_prefixes`.
+ *    SyntaxHighlighter Evolved is the canonical example: its bootstrap is
+ *    an inline <script>SyntaxHighlighter.all()</script> tag that runs
+ *    synchronously when the parser hits it. If we defer the externals
+ *    (`syntaxhighlighter-core`, brushes, themes), the inline call fires
+ *    while `SyntaxHighlighter` is still undefined and the page silently
+ *    loses every code block. Prefix-matching keeps every future brush
+ *    handle (e.g. `syntaxhighlighter-brush-rust`) protected without any
+ *    code change here.
  *
  * @param string $tag    Full <script> tag.
  * @param string $handle Registered script handle.
@@ -150,6 +163,19 @@ function astra_child_seo_defer_scripts( $tag, $handle ) {
 
 	if ( in_array( $handle, $blocking, true ) ) {
 		return $tag;
+	}
+
+	$prefixes = apply_filters(
+		'astra_child_seo_blocking_script_prefixes',
+		array( 'syntaxhighlighter-' )
+	);
+
+	if ( is_array( $prefixes ) ) {
+		foreach ( $prefixes as $prefix ) {
+			if ( '' !== $prefix && 0 === strpos( $handle, (string) $prefix ) ) {
+				return $tag;
+			}
+		}
 	}
 
 	if ( false !== strpos( $tag, ' defer' ) || false !== strpos( $tag, ' async' ) ) {
