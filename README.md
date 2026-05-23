@@ -1,5 +1,7 @@
 # pyarabic
 
+[العربية](README.ar.md) | **English**
+
 Source code for the **[pyarabic.com](https://pyarabic.com/)** WordPress site:
 an Arabic-language WordPress installation built on the [Astra](https://wordpress.org/themes/astra/)
 parent theme and [Yoast SEO Free](https://wordpress.org/plugins/wordpress-seo/),
