@@ -108,6 +108,16 @@ add_filter( 'astra_child_seo_blocking_scripts', function ( $handles ) {
     $handles[] = 'my-critical-script';
     return $handles;
 } );
+
+// Don't defer scripts whose handle starts with a given prefix. The default
+// list already protects SyntaxHighlighter Evolved (handles starting with
+// `syntaxhighlighter-`) because its bootstrap is an inline script that
+// depends on the externals being loaded synchronously - deferring those
+// would silently break every code block on the site.
+add_filter( 'astra_child_seo_blocking_script_prefixes', function ( $prefixes ) {
+    $prefixes[] = 'prism-';        // also keep Prism.js synchronous, etc.
+    return $prefixes;
+} );
 ```
 
 ## FAQ shortcode usage
