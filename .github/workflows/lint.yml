@@ -1,0 +1,91 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - 'astra-child/**/*.php'
+      - 'header.php'
+      - 'phpcs.xml.dist'
+      - '.github/workflows/lint.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'astra-child/**/*.php'
+      - 'header.php'
+      - 'phpcs.xml.dist'
+      - '.github/workflows/lint.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  syntax:
+    name: PHP ${{ matrix.php-version }} syntax
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['7.4', '8.1', '8.2', '8.3']
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+          tools: none
+
+      - name: Run php -l on every PHP file
+        run: |
+          set -e
+          find astra-child header.php -type f -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  phpcs:
+    name: WordPress Coding Standards (phpcs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: cs2pr, composer:v2
+          coverage: none
+
+      - name: Cache Composer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-global-${{ runner.os }}-wpcs
+
+      - name: Install PHPCS, WPCS, and PHPCompatibilityWP globally
+        run: |
+          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require --no-interaction --no-progress \
+            "squizlabs/php_codesniffer:^3.10" \
+            "wp-coding-standards/wpcs:^3.1" \
+            "phpcompatibility/phpcompatibility-wp:^2.1" \
+            "dealerdirect/phpcodesniffer-composer-installer:^1.0"
+          echo "$(composer global config bin-dir --absolute --quiet)" >> "$GITHUB_PATH"
+
+      - name: Verify installed standards
+        run: phpcs -i
+
+      - name: Run PHP_CodeSniffer (annotate PR with results)
+        run: |
+          phpcs --report-full --report-checkstyle=phpcs-report.xml || true
+          cs2pr phpcs-report.xml
+
+      - name: Upload phpcs checkstyle report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phpcs-report
+          path: phpcs-report.xml
+          if-no-files-found: ignore

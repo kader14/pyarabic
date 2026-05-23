@@ -127,15 +127,33 @@ Highlights enforced in code review:
   (`function_exists( 'is_amp_endpoint' ) && is_amp_endpoint()`), and the
   Customizer preview (`is_customize_preview()`).
 
-If you have PHP_CodeSniffer with the WordPress ruleset installed, run it
-locally:
+### Running the linter locally
+
+The repository ships a `phpcs.xml.dist` configured for the WordPress
+Coding Standards. The `Lint` GitHub Actions workflow
+(`.github/workflows/lint.yml`) runs the same configuration on every
+pull request that touches PHP, and posts the findings as inline review
+comments via `cs2pr`.
+
+To run it locally before opening a PR:
 
 ```bash
-phpcs --standard=WordPress astra-child/
+# One-time install of phpcs + WPCS into your global Composer setup.
+composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer global require --dev \
+    "squizlabs/php_codesniffer:^3.10" \
+    "wp-coding-standards/wpcs:^3.1" \
+    "phpcompatibility/phpcompatibility-wp:^2.1" \
+    "dealerdirect/phpcodesniffer-composer-installer:^1.0"
+
+# From the repo root - no flags needed; phpcs.xml.dist drives everything.
+phpcs
 ```
 
-CI does **not** currently run linting, so please run it locally before
-asking for review.
+The workflow also runs `php -l` on every PHP file across PHP 7.4, 8.1,
+8.2, and 8.3 - that job is **blocking** (a syntax error fails the PR),
+while the WPCS job posts inline annotations without blocking so style
+violations don't gate hot fixes.
 
 ## Adding a new SEO module
 

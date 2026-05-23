@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<ruleset name="pyarabic">
+	<description>Coding standards for the pyarabic / astra-child repository.</description>
+
+	<!-- What gets scanned. -->
+	<file>astra-child/</file>
+	<file>header.php</file>
+
+	<!-- Folders to ignore. -->
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/assets/critical/*</exclude-pattern>
+
+	<!-- CLI behavior. -->
+	<arg name="extensions" value="php"/>
+	<arg name="basepath" value="."/>
+	<arg name="parallel" value="8"/>
+	<arg name="cache" value=".phpcs-cache"/>
+	<arg name="colors"/>
+	<arg value="ps"/>
+
+	<!-- WordPress meta-standard (Core + Docs + Extra). -->
+	<rule ref="WordPress">
+		<!--
+			The child theme intentionally prints the AdSense loader as an
+			inline <script> tag in functions.php. That keeps it identical to
+			how the parent theme used to load it from header.php. Suppress
+			the corresponding rule so phpcs doesn't complain.
+		-->
+		<exclude name="WordPress.WP.EnqueuedResources.NonEnqueuedScript"/>
+	</rule>
+
+	<!-- Tell the i18n sniffs which text-domain we use. -->
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array" value="astra-child"/>
+		</properties>
+	</rule>
+
+	<!-- File naming check uses the theme prefix. -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array" value="astra_child,ac_,ASTRA_CHILD"/>
+		</properties>
+	</rule>
+
+	<!-- WordPress / PHP version targets. -->
+	<config name="minimum_supported_wp_version" value="6.0"/>
+	<config name="testVersion" value="7.4-"/>
+</ruleset>
