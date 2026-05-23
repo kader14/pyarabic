@@ -81,6 +81,31 @@ function astra_child_seo_yoast_default_og_image( $image ) {
 add_filter( 'wpseo_opengraph_image', 'astra_child_seo_yoast_default_og_image' );
 
 /**
+ * Force Yoast to use the full-size featured image for Open Graph and
+ * Twitter card previews.
+ *
+ * Yoast defaults to the WordPress `large` size (1024px wide), which is
+ * smaller than the 1200px minimum that Google requires to actually honor
+ * `max-image-preview:large` in SERP and Discover. With `large`, Google
+ * downgrades to the smaller "thumbnail" preview even though the robots
+ * directive permits the large one. Switching to `full` uses the original
+ * upload, which is typically >= 1200px wide for modern uploads (Gemini,
+ * Midjourney, DSLR, modern phones, etc).
+ *
+ * Configurable via the `astra_child_seo_og_image_size` filter for sites
+ * that prefer a different size.
+ *
+ * @param string $size Image size keyword passed to wp_get_attachment_image_src.
+ * @return string
+ */
+function astra_child_seo_yoast_og_image_size( $size ) {
+	$override = apply_filters( 'astra_child_seo_og_image_size', 'full' );
+	return is_string( $override ) && '' !== $override ? $override : $size;
+}
+add_filter( 'wpseo_opengraph_image_size', 'astra_child_seo_yoast_og_image_size' );
+add_filter( 'wpseo_twitter_image_size', 'astra_child_seo_yoast_og_image_size' );
+
+/**
  * Add the article publisher to the Yoast schema graph for posts.
  *
  * Yoast Free already adds Organization schema globally, but it does not
