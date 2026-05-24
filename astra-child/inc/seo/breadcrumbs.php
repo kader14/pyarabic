@@ -6,26 +6,24 @@
  *
  *     Missing field "itemListElement" (in "BreadcrumbList")
  *
- * which Yoast SEO Free emits on some pages where the breadcrumb trail is
- * empty (home, 404, search, paginated archives) or where the parent theme
- * (Astra) leaks its own incomplete BreadcrumbList microdata.
+ * which Yoast SEO Free emits when a page references a BreadcrumbList that
+ * doesn't actually exist in the @graph (orphan reference). This happens
+ * when Yoast emits `WebPage.breadcrumb = {@id: ...#breadcrumb}` but the
+ * BreadcrumbList graph piece is missing - either because Yoast itself
+ * suppressed it, or because a downstream filter dropped it.
  *
- * Two-pronged fix:
+ * Three-pronged fix:
  *
  *   1. Suppress Astra's microdata so we keep a single, validated source
  *      of structured data.
  *
  *   2. Filter Yoast's wpseo_schema_breadcrumb piece. If itemListElement
- *      is missing or empty, rebuild it from the current request. If we
- *      genuinely cannot produce a meaningful trail, return false so
- *      Yoast drops the BreadcrumbList from the @graph entirely - which
- *      is preferable to emitting an invalid one.
+ *      is missing or empty, rebuild it from the current request.
  *
- * Disable the whole module:
- *   add_filter( 'astra_child_seo_module_breadcrumbs', '__return_false' );
- *
- * Keep Astra's breadcrumb schema (not recommended):
- *   add_filter( 'astra_child_seo_breadcrumbs_disable_astra_schema', '__return_false' );
+ *   3. Final pass on wpseo_schema_graph: if WebPage references a
+ *      BreadcrumbList @id that has no matching node, either inject a
+ *      valid node we built ourselves, or strip the dangling reference
+ *      so Google doesn't see an empty BreadcrumbList stub.
  *
  * @package Astra Child
  * @since   1.4.0
@@ -37,9 +35,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Tell Astra not to emit its own breadcrumb microdata / schema.
- *
- * Astra exposes a few filters depending on version. We hit all of them
- * defensively so the change is robust across Astra updates.
  */
 function astra_child_seo_breadcrumbs_silence_astra() {
 	if ( ! apply_filters( 'astra_child_seo_breadcrumbs_disable_astra_schema', true ) ) {
@@ -56,9 +51,6 @@ add_action( 'init', 'astra_child_seo_breadcrumbs_silence_astra' );
 /**
  * Build a BreadcrumbList itemListElement array for the current request.
  *
- * Returns an empty array when no meaningful trail exists (e.g. front
- * page where Home is the page itself).
- *
  * @return array<int,array<string,mixed>>
  */
 function astra_child_seo_breadcrumbs_items() {
@@ -73,8 +65,6 @@ function astra_child_seo_breadcrumbs_items() {
 	);
 
 	if ( is_front_page() ) {
-		// The front page IS Home. A single-item BreadcrumbList is invalid
-		// for Google, so signal an empty trail and let Yoast drop it.
 		return array();
 	}
 
@@ -112,7 +102,6 @@ function astra_child_seo_breadcrumbs_items() {
 			'item'     => get_permalink(),
 		);
 	} elseif ( is_singular() ) {
-		// Custom post type single.
 		$items[] = array(
 			'@type'    => 'ListItem',
 			'position' => $position++,
@@ -187,8 +176,6 @@ function astra_child_seo_breadcrumbs_items() {
 	}
 
 	if ( count( $items ) < 2 ) {
-		// Single-item BreadcrumbList is invalid - report empty so caller
-		// can drop the BreadcrumbList from the schema graph.
 		return array();
 	}
 
@@ -204,7 +191,7 @@ function astra_child_seo_breadcrumbs_items() {
  * Make sure the BreadcrumbList Yoast emits has a valid itemListElement.
  *
  * @param array<string,mixed>|false $data Yoast schema piece data.
- * @return array<string,mixed>|false Modified piece, or false to drop the piece entirely.
+ * @return array<string,mixed>|false
  */
 function astra_child_seo_breadcrumbs_filter_schema( $data ) {
 	if ( ! is_array( $data ) ) {
@@ -222,9 +209,8 @@ function astra_child_seo_breadcrumbs_filter_schema( $data ) {
 	$rebuilt = astra_child_seo_breadcrumbs_items();
 
 	if ( empty( $rebuilt ) ) {
-		// No meaningful trail - tell Yoast to drop the piece. Returning
-		// false from a wpseo_schema_* filter removes that node from the
-		// JSON-LD graph.
+		// No meaningful trail. The graph filter below will strip the
+		// orphan WebPage.breadcrumb reference.
 		return false;
 	}
 
@@ -234,3 +220,93 @@ function astra_child_seo_breadcrumbs_filter_schema( $data ) {
 	return $data;
 }
 add_filter( 'wpseo_schema_breadcrumb', 'astra_child_seo_breadcrumbs_filter_schema', 99 );
+
+/**
+ * Final-pass guarantee: ensure WebPage's breadcrumb reference resolves to
+ * an actual BreadcrumbList node in the @graph.
+ *
+ * Yoast Free in some configurations (notably with Astra as parent theme,
+ * Yoast 21+) emits `WebPage.breadcrumb = {@id: ".../#breadcrumb"}` but
+ * never adds the BreadcrumbList graph piece itself. Our wpseo_schema_breadcrumb
+ * filter only fires when Yoast generates the piece in the first place, so
+ * it can't fix this case.
+ *
+ * This filter walks the final graph after every other Yoast piece has been
+ * generated. If the page references a BreadcrumbList @id that doesn't have
+ * a matching node, we inject a valid one ourselves. If we can't build a
+ * meaningful trail, we strip the dangling reference instead so Google
+ * doesn't synthesize an empty BreadcrumbList from the orphan.
+ *
+ * @param array<int,array<string,mixed>> $graph   The full @graph array.
+ * @param mixed                          $context Yoast meta_tags_context.
+ * @return array<int,array<string,mixed>>
+ */
+function astra_child_seo_breadcrumbs_ensure_node( $graph, $context = null ) {
+	unset( $context );
+
+	if ( ! is_array( $graph ) || empty( $graph ) ) {
+		return $graph;
+	}
+
+	$page_types = array(
+		'WebPage',
+		'CollectionPage',
+		'ItemPage',
+		'AboutPage',
+		'ContactPage',
+		'ProfilePage',
+		'SearchResultsPage',
+	);
+
+	// Locate the WebPage piece and the @id it expects for its breadcrumb.
+	$referenced_id = null;
+	$owner_idx     = null;
+
+	foreach ( $graph as $idx => $node ) {
+		if ( ! is_array( $node ) || empty( $node['@type'] ) ) {
+			continue;
+		}
+		$types     = (array) $node['@type'];
+		$is_page   = (bool) array_intersect( $types, $page_types );
+		if ( ! $is_page ) {
+			continue;
+		}
+		if ( ! empty( $node['breadcrumb']['@id'] ) ) {
+			$referenced_id = $node['breadcrumb']['@id'];
+			$owner_idx     = $idx;
+			break;
+		}
+	}
+
+	if ( null === $referenced_id ) {
+		return $graph;
+	}
+
+	// Already has a real BreadcrumbList node? Leave the graph alone.
+	foreach ( $graph as $node ) {
+		if ( ! is_array( $node ) || empty( $node['@type'] ) || empty( $node['@id'] ) ) {
+			continue;
+		}
+		$types = (array) $node['@type'];
+		if ( in_array( 'BreadcrumbList', $types, true ) && $node['@id'] === $referenced_id ) {
+			return $graph;
+		}
+	}
+
+	// Orphan reference. Inject a real BreadcrumbList or strip the reference.
+	$items = astra_child_seo_breadcrumbs_items();
+
+	if ( count( $items ) < 2 ) {
+		unset( $graph[ $owner_idx ]['breadcrumb'] );
+		return array_values( $graph );
+	}
+
+	$graph[] = array(
+		'@type'           => 'BreadcrumbList',
+		'@id'             => $referenced_id,
+		'itemListElement' => $items,
+	);
+
+	return $graph;
+}
+add_filter( 'wpseo_schema_graph', 'astra_child_seo_breadcrumbs_ensure_node', 100, 2 );
