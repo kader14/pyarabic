@@ -11,11 +11,56 @@
  * resolve. Existing IDs are preserved; auto-generated IDs use
  * sanitize_title() so Arabic headings produce clean Arabic slugs.
  *
- * Disable globally:
- *   add_filter( 'astra_child_seo_module_toc', '__return_false' );
+ * --------------------------------------------------------------------
+ * Excluding specific headings from the TOC
+ * --------------------------------------------------------------------
  *
- * Disable per request:
- *   add_filter( 'astra_child_seo_toc_enabled', '__return_false' );
+ * 1. Per-heading opt-out:
+ *      <h2 class="no-toc">Skip me</h2>
+ *      <h2 data-toc="false">Skip me too</h2>
+ *
+ * 2. Container opt-out (excludes every heading inside):
+ *      <div class="no-toc">
+ *          <h2>...</h2>
+ *          <h3>...</h3>
+ *      </div>
+ *
+ * 3. Headings inside these semantic containers are skipped automatically:
+ *      <aside>, <blockquote>, <nav>, <header>, <footer>,
+ *      <form>, <details>, <figure>, <figcaption>, <template>
+ *
+ *    Override the list:
+ *      add_filter( 'astra_child_seo_toc_excluded_containers', function ( $tags ) {
+ *          $tags[] = 'section';     // also skip headings inside <section>
+ *          return array_diff( $tags, array( 'aside' ) ); // ... but allow aside
+ *      } );
+ *
+ * 4. Skip headings whose text matches a regex pattern. Useful when a
+ *    related-posts block injects a fixed heading like "اقرأ أيضاً":
+ *
+ *      add_filter( 'astra_child_seo_toc_excluded_text_patterns', function ( $patterns ) {
+ *          $patterns[] = '/^اقرأ\s+أيضا/u';
+ *          $patterns[] = '/^مقالات\s+ذات\s+صلة/u';
+ *          $patterns[] = '/^You may also like/i';
+ *          return $patterns;
+ *      } );
+ *
+ * --------------------------------------------------------------------
+ * Other tunables
+ * --------------------------------------------------------------------
+ *
+ *  - Post types that get a TOC (default: ['post']):
+ *      astra_child_seo_toc_post_types
+ *  - Heading levels considered (default: ['h2','h3']):
+ *      astra_child_seo_toc_levels
+ *  - Minimum word count to auto-insert (default: 500):
+ *      astra_child_seo_toc_min_words
+ *  - Minimum heading count required to render (default: 3):
+ *      astra_child_seo_toc_min_headings
+ *  - Maximum heading count - extras truncated (default: 30, 0 = unlimited):
+ *      astra_child_seo_toc_max_headings
+ *  - Disable per-request:        astra_child_seo_toc_enabled
+ *  - Disable globally (module):  astra_child_seo_module_toc
  *
  * @package Astra Child
  * @since   1.9.0
@@ -35,7 +80,9 @@ function astra_child_seo_toc_should_run() {
 		return false;
 	}
 
-	if ( ! is_singular( 'post' ) ) {
+	$post_types = (array) apply_filters( 'astra_child_seo_toc_post_types', array( 'post' ) );
+
+	if ( ! is_singular( $post_types ) ) {
 		return false;
 	}
 
@@ -49,6 +96,90 @@ function astra_child_seo_toc_should_run() {
 	 * @param bool $enabled
 	 */
 	return (bool) apply_filters( 'astra_child_seo_toc_enabled', true );
+}
+
+/**
+ * Default list of structural elements whose headings should not appear
+ * in the TOC. These are wrappers for tangentially related content
+ * (asides, quotes, navigation, related-posts blocks, etc.) where the
+ * heading is part of the wrapper's UI rather than the article outline.
+ *
+ * @return array<int,string>
+ */
+function astra_child_seo_toc_default_excluded_containers() {
+	return array(
+		'aside',
+		'blockquote',
+		'nav',
+		'header',
+		'footer',
+		'form',
+		'details',     // collapsibles - already self-document
+		'figure',
+		'figcaption',
+		'template',    // <template> contents shouldn't render at all
+	);
+}
+
+/**
+ * Decide whether a heading element should be excluded from the TOC.
+ *
+ * Excluded when:
+ *   - the heading itself or any ancestor up to (but not including) $root
+ *     has class "no-toc";
+ *   - the heading has data-toc="false";
+ *   - any ancestor up to $root is in $excluded_containers;
+ *   - the heading text matches one of $excluded_text_patterns (regex).
+ *
+ * @param DOMElement                  $node                    Heading element.
+ * @param DOMNode                     $root                    Wrapper element to stop ancestor walk at.
+ * @param array<int,string>           $excluded_containers     Lower-cased tag names.
+ * @param array<int,string>           $excluded_text_patterns  Regex patterns (PCRE).
+ * @return bool
+ */
+function astra_child_seo_toc_is_excluded( $node, $root, $excluded_containers, $excluded_text_patterns ) {
+	// Per-heading data-toc opt-out.
+	$data_toc = strtolower( trim( (string) $node->getAttribute( 'data-toc' ) ) );
+	if ( 'false' === $data_toc || 'no' === $data_toc || '0' === $data_toc ) {
+		return true;
+	}
+
+	// Walk ancestors up to (but not including) the wrapper root.
+	for ( $ancestor = $node; $ancestor && $ancestor !== $root; $ancestor = $ancestor->parentNode ) {
+		if ( ! ( $ancestor instanceof DOMElement ) ) {
+			continue;
+		}
+
+		$tag = strtolower( $ancestor->nodeName );
+
+		if ( in_array( $tag, $excluded_containers, true ) ) {
+			return true;
+		}
+
+		$class_attr = (string) $ancestor->getAttribute( 'class' );
+		if ( '' !== $class_attr ) {
+			$classes = preg_split( '/\s+/', $class_attr ) ?: array();
+			if ( in_array( 'no-toc', $classes, true ) ) {
+				return true;
+			}
+		}
+	}
+
+	// Text-pattern exclusion (regex).
+	if ( ! empty( $excluded_text_patterns ) ) {
+		$text = trim( (string) $node->textContent );
+		foreach ( $excluded_text_patterns as $pattern ) {
+			if ( ! is_string( $pattern ) || '' === $pattern ) {
+				continue;
+			}
+			$matched = @preg_match( $pattern, $text ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+			if ( 1 === $matched ) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -80,11 +211,22 @@ function astra_child_seo_toc_count_words( $html ) {
  */
 function astra_child_seo_toc_collect( $content ) {
 	$levels = (array) apply_filters( 'astra_child_seo_toc_levels', array( 'h2', 'h3' ) );
-	$levels = array_map( 'strtolower', $levels );
+	$levels = array_unique( array_map( 'strtolower', array_filter( $levels, 'is_string' ) ) );
 
 	if ( empty( $levels ) ) {
 		return array( $content, array() );
 	}
+
+	$excluded_containers = (array) apply_filters(
+		'astra_child_seo_toc_excluded_containers',
+		astra_child_seo_toc_default_excluded_containers()
+	);
+	$excluded_containers = array_map( 'strtolower', array_filter( $excluded_containers, 'is_string' ) );
+
+	$excluded_text_patterns = (array) apply_filters(
+		'astra_child_seo_toc_excluded_text_patterns',
+		array()
+	);
 
 	$dom         = new DOMDocument( '1.0', 'UTF-8' );
 	$prev_libxml = libxml_use_internal_errors( true );
@@ -99,19 +241,28 @@ function astra_child_seo_toc_collect( $content ) {
 		return array( $content, array() );
 	}
 
-	$root = $dom->getElementById( 'ac-toc-root' );
-	if ( ! $root ) {
+	// Without a DTD, DOMDocument::getElementById is unreliable - fall
+	// back to an XPath @id lookup, which works regardless of DTD state.
+	$xpath      = new DOMXPath( $dom );
+	$root_nodes = $xpath->query( "//*[@id='ac-toc-root']" );
+	$root       = ( $root_nodes && $root_nodes->length ) ? $root_nodes->item( 0 ) : null;
+
+	if ( ! $root instanceof DOMElement ) {
 		return array( $content, array() );
 	}
 
-	$xpath      = new DOMXPath( $dom );
+	// Build a relative XPath that matches the configured heading levels
+	// only as descendants of the wrapper. The leading `.//` is essential
+	// here - `//` alone would search the whole document, which only
+	// happens to work because the wrapper is the document root, but the
+	// relative form keeps semantics honest and survives future refactors.
 	$conditions = array_map(
 		static function ( $tag ) {
-			return "name()='" . $tag . "'";
+			return 'self::' . $tag;
 		},
 		$levels
 	);
-	$query      = '//*[' . implode( ' or ', $conditions ) . ']';
+	$query = './/*[' . implode( ' or ', $conditions ) . ']';
 
 	$nodes = $xpath->query( $query, $root );
 	if ( ! $nodes || 0 === $nodes->length ) {
@@ -123,6 +274,14 @@ function astra_child_seo_toc_collect( $content ) {
 	$counter  = 0;
 
 	foreach ( $nodes as $node ) {
+		if ( ! $node instanceof DOMElement ) {
+			continue;
+		}
+
+		if ( astra_child_seo_toc_is_excluded( $node, $root, $excluded_containers, $excluded_text_patterns ) ) {
+			continue;
+		}
+
 		$text = trim( (string) $node->textContent );
 		if ( '' === $text ) {
 			continue;
@@ -165,7 +324,11 @@ function astra_child_seo_toc_collect( $content ) {
  * Render the TOC HTML from a list of heading entries.
  *
  * Builds a nested ordered list driven by the heading levels so h3s end
- * up indented under their preceding h2.
+ * up indented under their preceding h2. Handles the case where the
+ * first heading is deeper than the minimum level (e.g. a post that
+ * starts with an h3 intro before its h2 sections) by opening the
+ * required sub-lists up front instead of leaving the h3 dangling at
+ * the top level.
  *
  * @param array<int,array{id:string,level:int,text:string}> $headings Heading list.
  * @return string
@@ -201,7 +364,12 @@ function astra_child_seo_toc_render( $headings ) {
 		$level = (int) $h['level'];
 
 		if ( 0 === $i ) {
-			// First item.
+			// First item: if it's deeper than the minimum, open the
+			// required number of sub-lists so the first <li> sits at
+			// the correct depth instead of dangling at top level.
+			if ( $level > $min_level ) {
+				echo str_repeat( '<ol class="ac-toc-sublist">', $level - $min_level );
+			}
 		} elseif ( $level > $prev_level ) {
 			echo str_repeat( '<ol class="ac-toc-sublist">', $level - $prev_level );
 		} elseif ( $level < $prev_level ) {
@@ -221,7 +389,9 @@ function astra_child_seo_toc_render( $headings ) {
 	}
 
 	echo '</li>';
-	echo str_repeat( '</ol></li>', $prev_level - $min_level );
+	if ( $prev_level > $min_level ) {
+		echo str_repeat( '</ol></li>', $prev_level - $min_level );
+	}
 	echo '</ol>';
 
 	if ( $collapsible ) {
@@ -292,6 +462,12 @@ function astra_child_seo_toc_filter( $content ) {
 			$modified = str_replace( '<!--ac-toc-placeholder-->', '', $modified );
 		}
 		return $modified;
+	}
+
+	// Cap runaway TOCs - extras dropped silently. 0 disables the cap.
+	$max_headings = (int) apply_filters( 'astra_child_seo_toc_max_headings', 30 );
+	if ( $max_headings > 0 && count( $headings ) > $max_headings ) {
+		$headings = array_slice( $headings, 0, $max_headings );
 	}
 
 	$toc_html = astra_child_seo_toc_render( $headings );
